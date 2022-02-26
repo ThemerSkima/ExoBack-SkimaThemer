@@ -17,7 +17,7 @@ const User = require("./model/user");
 
 
 app.use(express.json());
-//setup express to use body-parser 
+//setup express to use body-parser for split,date etc..
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 app.use(bodyParser.text());
@@ -76,44 +76,46 @@ ExobackApiRoutes.post("/register", async(req, res) => {
 });
 
 //LOGIN
-ExobackApiRoutes.post("/login", async (req, res) => {
-    try {
-        // Get user input
-        const { email, password } = req.body;
+    ExobackApiRoutes.post("/login", async (req, res) => {
+        try {
+            // Get user input
+            const { email, password } = req.body;
 
-        // Validate user input
-        if (!(email && password)) {
-            res.status(400).send("All input is required");
+            // Validate user input
+            if (!(email && password)) {
+                res.status(400).send("All input is required");
+            }
+            // Validate if user exist in our database
+            const user = await User.findOne({ email }).select("+password");
+
+            if (user && (await bcrypt.compare(password, user.password))) {
+                // Create token
+                const token = jwt.sign(
+                    { user_id: user._id, email },
+                    process.env.TOKEN_KEY,
+                    {
+                        expiresIn: "24h",
+                    }
+                );
+
+                // save user token
+                user.token = token;
+                rateLimit[token] = { words: 0, date: new Date() };
+                res.json({
+                    success: true,
+                    message: 'Voici le token',
+                    token: token
+                });
+                // user
+                //return res.status(200).json(user);
+                return true;
+            }
+            return res.status(400).send("Invalid Credentials");
+        } catch (err) {
+            console.log(err);
         }
-        // Validate if user exist in our database
-        const user = await User.findOne({ email }).select("+password");
+    });
 
-        if (user && (await bcrypt.compare(password, user.password))) {
-            // Create token
-            const token = jwt.sign(
-                { user_id: user._id, email },
-                process.env.TOKEN_KEY,
-                {
-                    expiresIn: "24h",
-                }
-            );
-
-            // save user token
-            user.token = token;
-            rateLimit[token] = { words: 0, date: new Date() };
-            res.json({
-                success: true,
-                message: 'Voici le token',
-                token: token
-            });
-            // user
-            //return res.status(200).json(user);
-        }
-        return res.status(400).send("Invalid Credentials");
-    } catch (err) {
-        console.log(err);
-    }
-});
 
 //Token verification after creating middleware for authentication
 ExobackApiRoutes.post("/token", authen, (req, res) => {
